@@ -1,0 +1,11 @@
+FROM node:lts
+
+WORKDIR /app
+
+RUN git clone --branch prod https://github.com/texas2010/api.server.texas2010.com.git .
+
+RUN npm ci
+RUN npm run build:ts
+
+ENV NODE_ENV=production
+CMD ["npx", "fastify", "start", "./dist/app.js"]

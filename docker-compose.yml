@@ -1,0 +1,41 @@
+version: '3.9'
+
+name: infra-home-texas2010-com
+
+services:
+  caddy:
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    ports:
+      - '${HTTPS_PORT:-443}:443'
+      - '${HTTP_PORT:-80}:80'
+    environment:
+      - DOMAIN=${DOMAIN}
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data:/data
+      - ./config:/config
+    networks:
+      - public
+      - internal
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      - DOMAIN=${DOMAIN}
+    expose:
+      - '3000' # container-only; Caddy can reach api:3000
+    networks:
+      - internal # same internal net Caddy uses
+
+networks:
+  public: {} # Caddy <-> host (published ports)
+  internal:
+    internal: true # Caddy <-> app containers only
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}

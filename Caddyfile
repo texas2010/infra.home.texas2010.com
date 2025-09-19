@@ -1,0 +1,14 @@
+{
+    admin 0.0.0.0:2019
+}
+
+*.{$DOMAIN}, {$DOMAIN} {
+    tls {
+        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+    }
+}
+
+
+api.{$DOMAIN} {
+    reverse_proxy api:3000
+}
