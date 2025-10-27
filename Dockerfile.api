@@ -2,7 +2,7 @@ FROM node:lts
 
 WORKDIR /app
 
-RUN git clone --depth=1 --branch=prod https://github.com/texas2010/api.server.texas2010.com.git .
+RUN git clone --depth=1 --branch=prod https://github.com/texas2010/api.home.texas2010.com.git .
 
 RUN npm i -g pino-pretty
 
