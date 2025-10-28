@@ -116,7 +116,11 @@ systemd-disable: ## Disable Systemd Service
 	sudo systemctl disable $(SERVICE_NAME)
 
 systemd-rebuild: ## Rebuild images and restart via systemd
+	@echo "Stopping System Service..."
+	sudo systemctl stop $(SERVICE_NAME)
+	@echo "Pulling latest code from Git..."
+	git pull
 	@echo "Rebuilding Docker images without cache..."
 	docker compose -f $(COMPOSE_FILE) build --no-cache
-	@echo "Restarting Systemd Service..."
-	sudo systemctl restart $(SERVICE_NAME)
+	@echo "Starting Systemd Service..."
+	sudo systemctl start $(SERVICE_NAME)
