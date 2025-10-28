@@ -22,18 +22,35 @@ services:
       # - web_net
 
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
+    image: ghcr.io/texas2010/api.home.texas2010.com:latest
+    container_name: api-service
     restart: ${DOCKER_RESTART:-no}
+    labels:
+      - 'com.centurylinklabs.watchtower.enable=true'
     environment:
       - DOMAIN=${DOMAIN}
+      - WATCHTOWER_NOTIFICATIONS_LEVEL=info
     expose:
       - '3000' # container-only; Caddy can reach api:3000
     networks:
       - api_net
       # - backend_net
       # - data_net
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: ${DOCKER_RESTART:-no}
+    depends_on:
+      - api
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: >
+      --label-enable
+      --interval 300
+      --cleanup
+
+  # -- interval 86400 // 1 day
 
   # dashboard:
   # network: [web_net, api_net]
@@ -43,17 +60,6 @@ services:
 
   # database:
   # network: [data_net]
-
-  # api:
-  # image: url
-  # labels:
-  # - "com.centurylinklabs.watchtower.enable=true"
-
-  # watchtower:
-  # image: containrrr/watchtower
-  # command: --label-enable --interval 300 --cleanup
-  # volumes:
-  # - /var/run/docker.sock:/var/run/docker.sock
 
 networks:
   public_net: {} # Caddy <-> host (published ports)
