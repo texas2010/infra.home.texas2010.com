@@ -23,7 +23,6 @@ services:
 
   api:
     image: ghcr.io/texas2010/api.home.texas2010.com:latest
-    container_name: api-service
     restart: ${DOCKER_RESTART:-no}
     labels:
       - 'com.centurylinklabs.watchtower.enable=true'
@@ -39,10 +38,7 @@ services:
 
   watchtower:
     image: containrrr/watchtower
-    container_name: watchtower
     restart: ${DOCKER_RESTART:-no}
-    depends_on:
-      - api
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     command: >
