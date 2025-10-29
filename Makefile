@@ -23,31 +23,74 @@ CYAN   := \033[36m
 
 
 # === Help command ===
-help: ## Show this help message
-	@echo "Available commands:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
+help: ## Show top-level help categories
+	@echo "$(BOLD)Available top-level commands:$(RESET)"
+	@grep -E '^[a-zA-Z0-9_.-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+	| grep -vE '^(docker-|systemd)' \
+	| awk 'BEGIN {FS = ":.*?## "}; {printf "  %-22s %s\n", $$1, $$2}'
+	@echo ""
+	@echo "$(BOLD)Subcommand help targets:$(RESET)"
+	@grep -E '^[a-zA-Z0-9_.-]+-help:.*?## .*$$' $(MAKEFILE_LIST) \
+	| awk 'BEGIN {FS = ":.*?## "}; {printf "  %-22s %s\n", $$1, $$2}'
 
-# === Base Commands ===
 
 # === Docker Control ===
+DOCKER_HELP = \
+	up:"[Docker] Start containers (detached)" \
+	down:"[Docker] Stop and remove containers" \
+	restart:"[Docker] Restart containers" \
+	ps:"[Docker] Show container status" \
+	status:"[Docker] Show container status" \
+	logs:"[Docker] Show logs" \
+	build:"[Docker] Rebuild images"
+
+docker-help: ## [Docker] Show Docker subcommands
+	@echo "$(BOLD)Docker subcommands:$(RESET)"
+	@for item in $(DOCKER_HELP); do \
+		key=$${item%%:*}; val=$${item#*:}; \
+		printf "  docker-%-15s %s\n" "$$key" "$$val"; \
+	done
+	@grep -E '^docker-[a-zA-Z0-9_.-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+	| awk 'BEGIN {FS=":.*?## "}; {printf "  %-22s %s\n", $$1, $$2}'
+
 docker-%:
-	@case "$*" in \
+	@cmd="$*"; \
+	case "$$cmd" in \
 		up)         echo "$(GREEN)[Docker] Starting containers $(SERVICE_NAME)...$(RESET)";; \
 		down)       echo "$(YELLOW)[Docker] Stopping and removing containers $(SERVICE_NAME)...$(RESET)";; \
 		restart)    echo "$(BLUE)[Docker] Restarting containers $(SERVICE_NAME)...$(RESET)";; \
 		ps|status)  echo "$(CYAN)[Docker] Showing container status...$(RESET)";; \
 		logs)       echo "$(CYAN)[Docker] Showing logs $(SERVICE_NAME)...$(RESET)";; \
 		build)      echo "$(CYAN)[Docker] Rebuilding images $(SERVICE_NAME)...$(RESET)";; \
-		*)          echo "$(RED)[Docker] Unknown command '$*'$(RESET)"; exit 1;; \
+		*)          echo "$(RED)[Docker] Unknown command '$$cmd'$(RESET)"; exit 1;; \
 	esac; \
-	case "$*" in \
-		up)         docker compose -f $(COMPOSE_FILE) up -d;; \
-		status)     docker compose -f $(COMPOSE_FILE) ps;; \
-		logs)       docker compose -f $(COMPOSE_FILE) logs -f;; \
-		*)          docker compose -f $(COMPOSE_FILE) $$*;; \
+	case "$$cmd" in \
+		up)      docker compose -f $(COMPOSE_FILE) up -d;; \
+		status)  docker compose -f $(COMPOSE_FILE) ps;; \
+		logs)    docker compose -f $(COMPOSE_FILE) logs -f;; \
+		*)       docker compose -f $(COMPOSE_FILE) $$cmd;; \
 	esac
 
+
 # === Systemd Control ===
+SYSTEMD_HELP = \
+	start:"[Systemd] Start service" \
+	stop:"[Systemd] Stop service" \
+	restart:"[Systemd] Restart service" \
+	status:"[Systemd] Show service status" \
+	enable:"[Systemd] Enable service" \
+	disable:"[Systemd] Disable service"
+
+systemd-help: ## [Systemd] Show Systemd subcommands
+	@echo "$(BOLD)Systemd subcommands:$(RESET)"
+	@for item in $(SYSTEMD_HELP); do \
+		key=$${item%%:*}; val=$${item#*:}; \
+		printf "  systemd-%-15s %s\n" "$$key" "$$val"; \
+	done
+	@grep -E '^systemd-[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+	| awk 'BEGIN {FS = ":.*?## "}; {printf "  %-23s %s\n", $$1, $$2}'
+
+
 systemd-%:
 	@case "$*" in \
 		start)    echo "$(GREEN)[Systemd] Starting $(SERVICE_NAME)...$(RESET)";; \
@@ -59,8 +102,6 @@ systemd-%:
 		*)        echo "$(RED)[Systemd] Unknown command '$*'$(RESET)"; exit 1;; \
 	esac
 	@$(SYSTEMCTL) $* $(SERVICE_NAME)
-
-
 
 # === Workflow ===
 
@@ -84,7 +125,7 @@ update-all: ## [System] Stop, update from Git, rebuild, and restart containers
 	@echo "$(GREEN)[Docker] Starting containers...$(RESET)"
 	@$(MAKE) docker-up
 
-create-systemd-service-file: ## [Systemd] Build a .service file using the current directory
+create-systemd-service-file:
 	@mkdir -p logs
 	@echo "$(CYAN)[Systemd] Creating service file $(SYSTEMD_SERVICE_FILE)...$(RESET)"
 	@echo "[Unit]" > $(SYSTEMD_SERVICE_FILE)
@@ -105,7 +146,9 @@ create-systemd-service-file: ## [Systemd] Build a .service file using the curren
 	@echo "WantedBy=multi-user.target" >> $(SYSTEMD_SERVICE_FILE)
 	@echo "$(GREEN)[Systemd] Created: $(SYSTEMD_SERVICE_FILE)$(RESET)"
 
-install-systemd-service: create-systemd-service-file ## [Systemd] Move, reload, enable, and start service
+systemd-create-file: create-systemd-service-file ## [Systemd] Build a .service file using the current directory
+
+systemd-install-file: create-systemd-service-file ## [Systemd] Move, reload, enable, and start service
 	@echo "$(CYAN)[Systemd] Installing $(SERVICE_NAME)...$(RESET)"
 	sudo mv $(SYSTEMD_SERVICE_FILE) /etc/systemd/system/
 	sudo systemctl daemon-reload
@@ -114,8 +157,8 @@ install-systemd-service: create-systemd-service-file ## [Systemd] Move, reload, 
 
 systemd-uninstall: ## [Systemd] Stop, disable, and remove the unit
 	@echo "$(YELLOW)[Systemd] Uninstalling $(SERVICE_NAME)...$(RESET)"
-	sudo systemctl stop $(SERVICE_NAME) || true
-	sudo systemctl disable $(SERVICE_NAME) || true
+	$(SYSTEMCTL) stop $(SERVICE_NAME) || true
+	$(SYSTEMCTL) disable $(SERVICE_NAME) || true
 	sudo rm -f /etc/systemd/system/$(SYSTEMD_SERVICE_FILE)
 	sudo systemctl daemon-reload
 	@echo "$(RED)[Systemd] Removed: $(SYSTEMD_SERVICE_FILE)$(RESET)"
