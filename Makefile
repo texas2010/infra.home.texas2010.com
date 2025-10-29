@@ -1,66 +1,92 @@
-## You can edit this service name
-SERVICE_TITLE="Texas2010 Home Infrastructure"
-SERVICE_NAME=infra-home-texas2010-com
+## You can edit this
+SERVICE_TITLE := "Texas2010 Home Infrastructure"
+SERVICE_NAME := infra-home-texas2010-com
 
 
-## do not edit bottom to down.
+## Do not edit below this line to end of the fine.
 .DEFAULT_GOAL := help
-COMPOSE_FILE ?= docker-compose.yml
-SYSTEMD_SERVICE_FILE=$(SERVICE_NAME).service
+.PHONY: help docker-% systemd-%
 
+## === Variables ===
+COMPOSE_FILE := docker-compose.yml
+SYSTEMD_SERVICE_FILE := $(SERVICE_NAME).service
+SYSTEMCTL := sudo systemctl --no-pager
+
+# === Terminal Colors ===
+RESET  := \033[0m
+BOLD   := \033[1m
+RED    := \033[31m
+GREEN  := \033[32m
+YELLOW := \033[33m
+BLUE   := \033[34m
+CYAN   := \033[36m
+
+
+# === Help command ===
 help: ## Show this help message
 	@echo "Available commands:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
 
-docker-up: ## Start Docker containers
-	@echo "Starting containers using $(COMPOSE_FILE)..."
-	docker compose -f $(COMPOSE_FILE) up -d
+# === Base Commands ===
 
-docker-start: docker-up ## Start Docker containers
+# === Docker Control ===
+docker-%:
+	@case "$*" in \
+		up)         echo "$(GREEN)[Docker] Starting containers $(SERVICE_NAME)...$(RESET)";; \
+		down)       echo "$(YELLOW)[Docker] Stopping and removing containers $(SERVICE_NAME)...$(RESET)";; \
+		restart)    echo "$(BLUE)[Docker] Restarting containers $(SERVICE_NAME)...$(RESET)";; \
+		ps|status)  echo "$(CYAN)[Docker] Showing container status...$(RESET)";; \
+		logs)       echo "$(CYAN)[Docker] Showing logs $(SERVICE_NAME)...$(RESET)";; \
+		build)      echo "$(CYAN)[Docker] Rebuilding images $(SERVICE_NAME)...$(RESET)";; \
+		*)          echo "$(RED)[Docker] Unknown command '$*'$(RESET)"; exit 1;; \
+	esac; \
+	case "$*" in \
+		up)         docker compose -f $(COMPOSE_FILE) up -d;; \
+		status)     docker compose -f $(COMPOSE_FILE) ps;; \
+		logs)       docker compose -f $(COMPOSE_FILE) logs -f;; \
+		*)          docker compose -f $(COMPOSE_FILE) $$*;; \
+	esac
 
-docker-down: ## Stop Docker containers
-	@echo "Stopping containers..."
-	docker compose -f $(COMPOSE_FILE) down
+# === Systemd Control ===
+systemd-%:
+	@case "$*" in \
+		start)    echo "$(GREEN)[Systemd] Starting $(SERVICE_NAME)...$(RESET)";; \
+		stop)     echo "$(YELLOW)[Systemd] Stopping $(SERVICE_NAME)...$(RESET)";; \
+		restart)  echo "$(BLUE)[Systemd] Restarting $(SERVICE_NAME)...$(RESET)";; \
+		status)   echo "$(CYAN)[Systemd] Checking status $(SERVICE_NAME)...$(RESET)";; \
+		enable)   echo "$(CYAN)[Systemd] Enabling $(SERVICE_NAME)...$(RESET)";; \
+		disable)  echo "$(CYAN)[Systemd] Disabling $(SERVICE_NAME)...$(RESET)";; \
+		*)        echo "$(RED)[Systemd] Unknown command '$*'$(RESET)"; exit 1;; \
+	esac
+	@$(SYSTEMCTL) $* $(SERVICE_NAME)
 
-docker-stop: docker-down ## Stop Docker containers
 
-docker-restart: ## Restart Docker containers
-	@echo "Restarting containers..."
-	docker compose -f $(COMPOSE_FILE) down
-	docker compose -f $(COMPOSE_FILE) up -d
 
-docker-logs: ## Show Docker containers logs
-	@echo "Showing logs (Ctrl+C to exit)..."
-	docker compose -f $(COMPOSE_FILE) logs -f
+# === Workflow ===
 
-docker-ps: ## List running Docker containers
-	@echo "Listing running containers..."
-	docker compose -f $(COMPOSE_FILE) ps
-
-docker-clean: ## Remove Docker containers, volumes, and orphans
-	@echo "Removing containers, volumes, and orphans..."
+docker-clean: ## [Docker] Remove containers, volumes, and orphans
+	@echo "$(YELLOW)[Docker] Removing containers, volumes, and orphans...$(RESET)"
 	docker compose -f $(COMPOSE_FILE) down -v --remove-orphans
 	docker system prune -f
 
-docker-rebuild: ## Rebuild images without cache
-	@echo "Rebuilding images without cache..."
+docker-rebuild: ## [Docker] Rebuild images without cache
+	@echo "$(CYAN)[Docker] Rebuilding images without cache...$(RESET)"
 	docker compose -f $(COMPOSE_FILE) build --no-cache
-	@echo "Starting containers..."
-	docker compose -f $(COMPOSE_FILE) up -d
+	@$(MAKE) docker-up
 
-update-all: ## Stop, git pull, rebuild, and start
-	@echo "Stopping containers..."
-	docker compose -f $(COMPOSE_FILE) down
-	@echo "Pulling latest code from Git..."
+update-all: ## [System] Stop, update from Git, rebuild, and restart containers
+	@echo "$(YELLOW)[Docker] Stopping containers...$(RESET)"
+	@$(MAKE) docker-down
+	@echo "$(BLUE)[Git] Pulling latest code...$(RESET)"
 	git pull
-	@echo "Rebuilding images..."
+	@echo "$(CYAN)[Docker] Rebuilding images without cache...$(RESET)"
 	docker compose -f $(COMPOSE_FILE) build --no-cache
-	@echo "Starting containers..."
-	docker compose -f $(COMPOSE_FILE) up -d
+	@echo "$(GREEN)[Docker] Starting containers...$(RESET)"
+	@$(MAKE) docker-up
 
-create-systemd-service-file: ## Builds a .service file using the current directory
+create-systemd-service-file: ## [Systemd] Build a .service file using the current directory
 	@mkdir -p logs
-	@echo "Creating Systemd Service File..."
+	@echo "$(CYAN)[Systemd] Creating service file $(SYSTEMD_SERVICE_FILE)...$(RESET)"
 	@echo "[Unit]" > $(SYSTEMD_SERVICE_FILE)
 	@echo "Description=$(SERVICE_TITLE)" >> $(SYSTEMD_SERVICE_FILE)
 	@echo "After=network.target docker.service" >> $(SYSTEMD_SERVICE_FILE)
@@ -77,50 +103,34 @@ create-systemd-service-file: ## Builds a .service file using the current directo
 	@echo "" >> $(SYSTEMD_SERVICE_FILE)
 	@echo "[Install]" >> $(SYSTEMD_SERVICE_FILE)
 	@echo "WantedBy=multi-user.target" >> $(SYSTEMD_SERVICE_FILE)
-	@echo "Created: $(SYSTEMD_SERVICE_FILE)"
+	@echo "$(GREEN)[Systemd] Created: $(SYSTEMD_SERVICE_FILE)$(RESET)"
 
-install-systemd-service: create-systemd-service-file ## Moves it into /etc/systemd/system, reloads, enables, and starts it
-	@echo "Installing Systemd Service..."
+install-systemd-service: create-systemd-service-file ## [Systemd] Move, reload, enable, and start service
+	@echo "$(CYAN)[Systemd] Installing $(SERVICE_NAME)...$(RESET)"
 	sudo mv $(SYSTEMD_SERVICE_FILE) /etc/systemd/system/
 	sudo systemctl daemon-reload
-	sudo systemctl enable $(SERVICE_NAME)
-	sudo systemctl start $(SERVICE_NAME)
+	@$(MAKE) systemd-enable
+	@$(MAKE) systemd-start
 
-systemd-uninstall: ## Stops, disables, and removes the unit
-	@echo "Uninstalling Systemd Service..."
+systemd-uninstall: ## [Systemd] Stop, disable, and remove the unit
+	@echo "$(YELLOW)[Systemd] Uninstalling $(SERVICE_NAME)...$(RESET)"
 	sudo systemctl stop $(SERVICE_NAME) || true
 	sudo systemctl disable $(SERVICE_NAME) || true
 	sudo rm -f /etc/systemd/system/$(SYSTEMD_SERVICE_FILE)
 	sudo systemctl daemon-reload
-	@echo "Removed: $(SYSTEMD_SERVICE_FILE)"
+	@echo "$(RED)[Systemd] Removed: $(SYSTEMD_SERVICE_FILE)$(RESET)"
 
-
-systemd-status: ## Shows current service status
-	@echo "Checking Systemd Service..."
-	sudo systemctl status $(SERVICE_NAME)
-
-systemd-restart: ## Restarts via systemd
-	@echo "Restarting Systemd Service..."
-	sudo systemctl restart $(SERVICE_NAME)
-
-systemd-stop: ## Stops via systemd
-	@echo "Stopping Systemd Service..."
-	sudo systemctl stop $(SERVICE_NAME)
-
-systemd-enable: ## Enable Systemd Service
-	@echo "Enable Systemd Service..."
-	sudo systemctl enable $(SERVICE_NAME)
-
-systemd-disable: ## Disable Systemd Service
-	@echo "Disable Systemd Service..."
-	sudo systemctl disable $(SERVICE_NAME)
-
-systemd-rebuild: ## Rebuild images and restart via systemd
-	@echo "Stopping System Service..."
-	sudo systemctl stop $(SERVICE_NAME)
-	@echo "Pulling latest code from Git..."
+systemd-rebuild: systemd-stop ## [Systemd] Rebuild Docker images and restart service
+	@echo "$(BLUE)[Git] Pulling latest code...$(RESET)"
 	git pull
-	@echo "Rebuilding Docker images without cache..."
+	@echo "$(CYAN)[Docker] Rebuilding images without cache...$(RESET)"
 	docker compose -f $(COMPOSE_FILE) build --no-cache
-	@echo "Starting Systemd Service..."
-	sudo systemctl start $(SERVICE_NAME)
+	@$(MAKE) systemd-start
+
+systemd-logs: ## [Systemd] Show full logs from systemd journal
+	@echo "$(CYAN)[Systemd] Showing full logs for $(SERVICE_NAME)...$(RESET)"
+	@sudo journalctl -u $(SERVICE_NAME)
+
+systemd-logs-recent: ## [Systemd] Show recent logs and follow live
+	@echo "$(CYAN)[Systemd] Showing recent logs for $(SERVICE_NAME)...(Ctrl+C to stop)$(RESET)"
+	@sudo journalctl -u $(SERVICE_NAME) -n 50 -f
